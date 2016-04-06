@@ -63,278 +63,309 @@ class Parser
   end
 end
 
-def print_stats
-  stats = Sidekiq::Stats.new
-  retry_set = Sidekiq::RetrySet.new
-  dead_set = Sidekiq::DeadSet.new
+class Stats
+  attr_reader :stats, :retry_set, :dead_set
 
-  puts "Processed: #{stats.processed}"
-  puts "Failed: #{stats.failed}"
-  puts "Scheduled size: #{stats.scheduled_size}"
-  puts "Retry size: #{stats.retry_size}"
-  puts "Dead size: #{stats.dead_size}"
-  puts "Enqueued: #{stats.enqueued}"
-  puts "Processes: #{stats.processes_size}"
-  puts "Workers: #{stats.workers_size}"
-  puts "Default queue latency: #{stats.default_queue_latency}"
-
-  puts "Queues: dead:  #{dead_set.size}"
-  puts "        retry: #{retry_set.size}"
-  stats.queues.each do |(queue_name, queue_size)|
-    puts "        #{queue_name}: #{queue_size}"
+  def initialize
+    @stats = Sidekiq::Stats.new
+    @retry_set = Sidekiq::RetrySet.new
+    @dead_set = Sidekiq::DeadSet.new
   end
-end
 
-def print_queues
-  Sidekiq::Queue.all.each do |queue|
-    printf "%30s: %5d (%8.2f s latency) %spaused\n", 
-             queue.name,
-             queue.size,
-             queue.latency,
-             queue.paused? ? '' : "not "
-  end
-  retry_set = Sidekiq::RetrySet.new
-  printf "%30s: %5d\n", "retry", retry_set.size
-  dead_set = Sidekiq::DeadSet.new
-  printf "%30s: %5d\n", "dead", dead_set.size
+  def to_s
+    stat_ary = [ "Processed: #{stats.processed}",
+                 "Failed: #{stats.failed}",
+                 "Scheduled size: #{stats.scheduled_size}",
+                 "Retry size: #{stats.retry_size}",
+                 "Dead size: #{stats.dead_size}",
+                 "Enqueued: #{stats.enqueued}",
+                 "Processes: #{stats.processes_size}",
+                 "Workers: #{stats.workers_size}",
+                 "Default queue latency: #{stats.default_queue_latency}",
 
-end
-
-def print_retry
-  retry_set = Sidekiq::RetrySet.new
-  puts "Retry entries: #{retry_set.size}"
-  retry_set.each do |job|
-    printf( "%24s - %19s\n  %-22s - %-37s\n  e: %19s - f: %19s\n  retry (%2d) at %-19s Continue retries?: %s\n  %s\n", 
-            job.jid,
-            job.created_at.strftime( "%F %T" ),
-            job.display_class,
-            job.item["error_class"],
-            job.enqueued_at.strftime( "%F %T" ),
-            Time.at( job.item["failed_at"] ).strftime( "%F %T" ),
-            job.item["retry_count"],
-            job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never",
-            job.item["retry"],
-            "#{job.item["error_class"]}: #{job.item["error_message"][0,77-job.item["error_class"].size]}" )
-    puts
-  end
-end
-
-def show_retry_entries
-  retry_set = Sidekiq::RetrySet.new
-  retry_set.each do |job|
-    next unless ARGV.include?( job.jid )
-
-    puts "JobID:         #{job.jid}"
-    puts "Created at:    #{job.created_at.strftime( "%F %T" )}"
-    puts "Enqueued at:   #{job.enqueued_at.strftime( "%F %T")}"
-    puts "Worker class:  #{job.display_class}"
-    puts "Arguments:     #{job.display_args}"
-    puts "Failed at:     #{Time.at( job.item["failed_at"] ).strftime( "%F %T" )}"
-    puts "Retried at:    #{job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never"}"
-    puts "Retries:       #{job.item["retry_count"]}"
-    puts "Retry?:        #{job.item["retry"]}"
-    puts "Error Class:   #{job.item["error_class"]}"
-    puts "Error Message: #{job.item["error_message"]}"
-    puts
-  end
-end
-
-def delete_retry_entries
-  retry_set = Sidekiq::RetrySet.new
-  deleted = 0
-  ARGV.each do |job_id|
-    # TODO: Inefficient in the free(beer) sidekiq version; 
-    #       find something more efficient here (sr 2016-04-06)
-    job = retry_set.find_job( job_id )
-    if job
-      job.delete
-      puts "#{job_id}: deleted"
-      deleted += 1
-    else
-      puts "#{job_id}: not found"
+                 "Queues: dead:  #{dead_set.size}",
+                 "        retry: #{retry_set.size}" ]
+    stats.queues.each do |(queue_name, queue_size)|
+      stat_ary << "        #{queue_name}: #{queue_size}"
     end
+
+    stat_ary.join( "\n" )
   end
-  puts "Retry Set: Deleted #{deleted} entries"
 end
 
-def kill_retry_entries
-  retry_set = Sidekiq::RetrySet.new
-  killed = 0
-  ARGV.each do |job_id|
-    # TODO: Inefficient in the free(beer) sidekiq version; 
-    #       find something more efficient here (sr 2016-04-06)
-    job = retry_set.find_job( job_id )
-    if job
-      begin
-        job.kill
-        puts "#{job_id}: moved to dead set"
-        killed += 1
-      rescue
-        puts "#{job_id}: failed - #{$!.message}"
+class Queues
+  attr_reader :retry_set, :dead_set
+
+  def initialize
+    @retry_set = Sidekiq::RetrySet.new
+    @dead_set = Sidekiq::DeadSet.new
+  end
+
+  def to_s
+    ary = Sidekiq::Queue.all.each_with_object( [] ) do |queue, memo|
+      memo << sprintf( "%-30s %5d (%8.2f s latency), %spaused", 
+                      queue.name,
+                      queue.size,
+                      queue.latency,
+                      queue.paused? ? '' : "not " )
+    end
+    ary << sprintf( "%-30s %5d", "retry", retry_set.size )
+    ary << sprintf( "%-30s %5d", "dead", dead_set.size )
+    ary.join( "\n" )
+  end
+end
+
+class Retries
+  attr_reader :retry_set
+
+  def initialize
+    @retry_set = Sidekiq::RetrySet.new
+  end
+
+  def to_s
+    retry_set.each_with_object( [ "Retry entries: #{retry_set.size}" ] ) do |job, memo|
+      memo << sprintf( "%24s - %19s\n  %-22s - %-37s\n  e: %19s - f: %19s\n  retry (%2d) at %-19s Continue retries?: %s\n  %s\n", 
+                        job.jid,
+                        job.created_at.strftime( "%F %T" ),
+                        job.display_class,
+                        job.item["error_class"],
+                        job.enqueued_at.strftime( "%F %T" ),
+                        Time.at( job.item["failed_at"] ).strftime( "%F %T" ),
+                        job.item["retry_count"],
+                        job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never",
+                        job.item["retry"],
+                        "#{job.item["error_class"]}: #{job.item["error_message"][0,77-job.item["error_class"].size]}" )
+    end.join( "\n" )
+  end
+
+  def details( job_ids )
+    retry_set.each_with_object( [] ) do |job, memo|
+      next unless job_ids.include?( job.jid )
+      memo << job_details( job )
+    end.join( "\n\n" )
+  end
+
+  def delete_entries( job_ids )
+    deleted = 0
+    job_ids.each do |job_id|
+      # TODO: Inefficient in the free(beer) sidekiq version; 
+      #       find something more efficient here (sr 2016-04-06)
+      job = retry_set.find_job( job_id )
+      if job
+        job.delete
+        puts "#{job_id}: deleted"
+        deleted += 1
+      else
+        puts "#{job_id}: not found"
       end
-    else
-      puts "#{job_id}: not found"
     end
+    puts "Retry Set: Deleted #{deleted} entries"
   end
 
-  puts "Retry Set: Moved #{killed} entries to Dead Set"
-end
-
-def retry_retry_entries
-  retry_set = Sidekiq::RetrySet.new
-  retried = 0
-  ARGV.each do |job_id|
-    # TODO: Inefficient in the free(beer) sidekiq version; 
-    #       find something more efficient here (sr 2016-04-06)
-    job = retry_set.find_job( job_id )
-    if job
-      begin
-        job.retry
-        puts "#{job_id}: retrying"
-        retried += 1
-      rescue
-        puts "#{job_id}: failed - #{$!.message}"
+  def kill_entries( job_ids )
+    killed = 0
+    job_ids.each do |job_id|
+      # TODO: Inefficient in the free(beer) sidekiq version; 
+      #       find something more efficient here (sr 2016-04-06)
+      job = retry_set.find_job( job_id )
+      if job
+        begin
+          job.kill
+          puts "#{job_id}: moved to dead set"
+          killed += 1
+        rescue
+          puts "#{job_id}: failed - #{$!.message}"
+        end
+      else
+        puts "#{job_id}: not found"
       end
-    else
-      puts "#{job_id}: not found"
     end
+
+    puts "Retry Set: Moved #{killed} entries to Dead Set"
   end
 
-  puts "Retry Set: Retried #{retried} entries"
-end
-
-def clear_retry_entries
-  retry_set = Sidekiq::RetrySet.new
-  size = retry_set.size
-  retry_set.clear
-  puts "Retry Set: Deleted #{size} entries"
-end
-
-def print_dead
-  dead_set = Sidekiq::DeadSet.new
-  puts "Dead entries: #{dead_set.size}"
-  dead_set.each do |job|
-    printf( "%24s - %19s\n  %-22s - %-37s\n  e: %19s - f: %19s\n  retry (%2d) at %-19s Continue retries?: %s\n  %s\n", 
-            job.jid,
-            job.created_at.strftime( "%F %T" ),
-            job.display_class,
-            job.item["error_class"],
-            job.enqueued_at.strftime( "%F %T" ),
-            Time.at( job.item["failed_at"] ).strftime( "%F %T" ),
-            job.item["retry_count"],
-            job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never",
-            job.item["retry"],
-            "#{job.item["error_class"]}: #{job.item["error_message"][0,77-job.item["error_class"].size]}" )
-    puts
-  end
-end
-
-def show_dead_entries
-  dead_set = Sidekiq::DeadSet.new
-  dead_set.each do |job|
-    next unless ARGV.include?( job.jid )
-
-    puts "JobID:         #{job.jid}"
-    puts "Created at:    #{job.created_at.strftime( "%F %T" )}"
-    puts "Enqueued at:   #{job.enqueued_at.strftime( "%F %T")}"
-    puts "Worker class:  #{job.display_class}"
-    puts "Arguments:     #{job.display_args}"
-    puts "Failed at:     #{Time.at( job.item["failed_at"] ).strftime( "%F %T" )}"
-    puts "Retried at:    #{job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never"}"
-    puts "Retries:       #{job.item["retry_count"]}"
-    puts "Retry?:        #{job.item["retry"]}"
-    puts "Error Class:   #{job.item["error_class"]}"
-    puts "Error Message: #{job.item["error_message"]}"
-    puts
-  end
-end
-
-def delete_dead_entries
-  dead_set = Sidekiq::DeadSet.new
-  deleted = 0
-  ARGV.each do |job_id|
-    # TODO: Inefficient in the free(beer) sidekiq version; 
-    #       find something more efficient here (sr 2016-04-06)
-    job = dead_set.find_job( job_id )
-    if job
-      job.delete
-      puts "#{job_id}: deleted"
-      deleted += 1
-    else
-      puts "#{job_id}: not found"
-    end
-  end
-  puts "Dead Set: Deleted #{deleted} entries"
-end
-
-def retry_dead_entries
-  dead_set = Sidekiq::DeadSet.new
-  retried = 0
-  ARGV.each do |job_id|
-    # TODO: Inefficient in the free(beer) sidekiq version; 
-    #       find something more efficient here (sr 2016-04-06)
-    job = dead_set.find_job( job_id )
-    if job
-      begin
-        job.retry
-        puts "#{job_id}: retrying"
-        retried += 1
-      rescue
-        puts "#{job_id}: failed - #{$!.message}"
+  def retry_entries( job_ids )
+    retried = 0
+    job_ids.each do |job_id|
+      # TODO: Inefficient in the free(beer) sidekiq version; 
+      #       find something more efficient here (sr 2016-04-06)
+      job = retry_set.find_job( job_id )
+      if job
+        begin
+          job.retry
+          puts "#{job_id}: retrying"
+          retried += 1
+        rescue
+          puts "#{job_id}: failed - #{$!.message}"
+        end
+      else
+        puts "#{job_id}: not found"
       end
-    else
-      puts "#{job_id}: not found"
     end
+
+    puts "Retry Set: Retried #{retried} entries"
   end
 
-  puts "Dead Set: Retried #{retried} entries"
-end
+  def clear
+    puts "Retry Set: Deleted #{retry_set.clear} entries"
+  end
 
-def clear_dead_entries
-  dead_set = Sidekiq::DeadSet.new
-  size = dead_set.size
-  dead_set.clear
-  puts "Dead Set: Deleted #{size} entries"
-end
-
-def print_processes
-  process_set = Sidekiq::ProcessSet.new
-
-  puts "Processes: #{process_set.size}"
-  process_set.each do |process|
-    STDERR.puts process.inspect
+  protected
+  def job_details( job )
+    [ "JobID:         #{job.jid}",
+      "Created at:    #{job.created_at.strftime( "%F %T" )}",
+      "Enqueued at:   #{job.enqueued_at.strftime( "%F %T")}",
+      "Worker class:  #{job.display_class}",
+      "Arguments:     #{job.display_args}",
+      "Failed at:     #{Time.at( job.item["failed_at"] ).strftime( "%F %T" )}",
+      "Retried at:    #{job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never"}",
+      "Retries:       #{job.item["retry_count"]}",
+      "Retry?:        #{job.item["retry"]}",
+      "Error Class:   #{job.item["error_class"]}",
+      "Error Message: #{job.item["error_message"]}" ].join( "\n" )
   end
 end
 
-def quiet_processes
-  process_set = Sidekiq::ProcessSet.new
-  size = process_set.size
-  process_set.each do |process|
-    process.quiet!
+class Dead
+  attr_reader :dead_set
+
+  def initialize
+    @dead_set = Sidekiq::DeadSet.new
   end
-  puts "Quieted #{size} processes"
-end
 
-def kill_processes
-  process_set = Sidekiq::ProcessSet.new
-  size = process_set.size
-  process_set.each do |process|
-    process.kill!
+  def to_s
+    dead_set.each_with_object( [ "Dead entries: #{dead_set.size}" ] ) do |job, memo|
+      memo << sprintf( "%24s - %19s\n  %-22s - %-37s\n  e: %19s - f: %19s\n  retry (%2d) at %-19s Continue retries?: %s\n  %s\n", 
+                       job.jid,
+                       job.created_at.strftime( "%F %T" ),
+                       job.display_class,
+                       job.item["error_class"],
+                       job.enqueued_at.strftime( "%F %T" ),
+                       Time.at( job.item["failed_at"] ).strftime( "%F %T" ),
+                       job.item["retry_count"],
+                       job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never",
+                       job.item["retry"],
+                       "#{job.item["error_class"]}: #{job.item["error_message"][0,77-job.item["error_class"].size]}" )
+    end.join( "\n" )
   end
-  puts "Killed #{size} processes"
+
+  def details( job_ids )
+    dead_set.each_with_object( [] ) do |job, memo|
+      next unless job_ids.include?( job.jid )
+      memo << job_details( job )
+    end.join( "\n\n" )
+  end
+
+  def delete_entries( job_ids )
+    deleted = 0
+    job_ids.each do |job_id|
+      # TODO: Inefficient in the free(beer) sidekiq version; 
+      #       find something more efficient here (sr 2016-04-06)
+      job = dead_set.find_job( job_id )
+      if job
+        job.delete
+        puts "#{job_id}: deleted"
+        deleted += 1
+      else
+        puts "#{job_id}: not found"
+      end
+    end
+    puts "Dead Set: Deleted #{deleted} entries"
+  end
+
+  def retry_entries( job_ids )
+    retried = 0
+    job_ids.each do |job_id|
+      # TODO: Inefficient in the free(beer) sidekiq version; 
+      #       find something more efficient here (sr 2016-04-06)
+      job = dead_set.find_job( job_id )
+      if job
+        begin
+          job.retry
+          puts "#{job_id}: retrying"
+          retried += 1
+        rescue
+          puts "#{job_id}: failed - #{$!.message}"
+        end
+      else
+        puts "#{job_id}: not found"
+      end
+    end
+
+    puts "Dead Set: Retried #{retried} entries"
+  end
+
+  def clear
+    puts "Dead Set: Deleted #{dead_set.clear} entries"
+  end
+
+  protected
+  def job_details( job )
+    [ "JobID:         #{job.jid}",
+      "Created at:    #{job.created_at.strftime( "%F %T" )}",
+      "Enqueued at:   #{job.enqueued_at.strftime( "%F %T")}",
+      "Worker class:  #{job.display_class}",
+      "Arguments:     #{job.display_args}",
+      "Failed at:     #{Time.at( job.item["failed_at"] ).strftime( "%F %T" )}",
+      "Retried at:    #{job.item["retried_at"] ? Time.at( job.item["retried_at"] ).strftime( "%F %T" ) : "never"}",
+      "Retries:       #{job.item["retry_count"]}",
+      "Retry?:        #{job.item["retry"]}",
+      "Error Class:   #{job.item["error_class"]}",
+      "Error Message: #{job.item["error_message"]}"
+    ].join( "\n" ) 
+  end
 end
 
-def clean_processes
-  cleaned_up = Sidekiq::ProcessSet.cleanup
-  puts "Cleaned up #{cleaned_up} processes"
+class Processes
+  attr_reader :process_set
+
+  def initialize
+    @process_set = Sidekiq::ProcessSet.new
+  end
+
+  def to_s
+    process_set.each_with_object( ["Processes: #{process_set.size}"] ) do |process, memo|
+      memo << process.inspect
+    end.join( "\n" )
+  end
+
+  def quiet
+    size = process_set.size
+    process_set.each do |process|
+      process.quiet!
+    end
+    puts "Quieted #{size} processes"
+  end
+
+  def kill
+    size = process_set.size
+    process_set.each do |process|
+      process.kill!
+    end
+    puts "Killed #{size} processes"
+  end
+
+  def clean
+    cleaned_up = Sidekiq::ProcessSet.cleanup
+    puts "Cleaned up #{cleaned_up} processes"
+  end
 end
 
-def print_workers
-  workers = Sidekiq::Workers.new
-  puts "Workers: #{workers.size}"
+class Workers
+  attr_reader :worker_set
 
-  workers.each do |key, tid, json|
-    printf "%15s %15s %20s\n", key, tid, json
+  def initialize
+    @worker_set = Sidekiq::Workers.new
+  end
+
+  def to_s
+    ary = [ "Workers: #{worker_set.size}" ]
+
+    worker_set.each do |key, tid, json|
+      ary << sprintf( "%15s %15s %20s\n", key, tid, json )
+    end
+
+    ary.join( "\n" )
   end
 end
 
@@ -346,47 +377,54 @@ Sidekiq.configure_client do |config|
 end
 
 case ARGV.shift
-  when "stats" then print_stats
+  when "stats" then puts Stats.new
 
   when "queue" 
     case ARGV.shift
-      when "list" then print_queues
+      when "list" then puts Queues.new
       else Parser.parse( %w[ --help ] )
     end
 
   when "retry" 
+    retries = Retries.new
+
     case ARGV.shift
-      when "list"  then print_retry
-      when "show"  then show_retry_entries
-      when "del"   then delete_retry_entries
-      when "kill"  then kill_retry_entries
-      when "now"   then retry_retry_entries
-      when "clear" then clear_retry_entries
+      when "list"  then puts retries
+      when "show"  then puts retries.details( ARGV )
+      when "del"   then retries.delete_entries( ARGV )
+      when "kill"  then retries.kill_entries( ARGV )
+      when "now"   then retries.retry_entries( ARGV )
+      when "clear" then retries.clear
       else Parser.parse( %w[ --help ] )
     end
 
   when "dead"
+    dead = Dead.new
+
     case ARGV.shift
-      when "list"  then print_dead
-      when "show"  then show_dead_entries
-      when "del"   then delete_dead_entries
-      when "now"   then dead_retry_entries
-      when "clear" then clear_dead_entries
+      when "list"  then puts dead
+      when "show"  then puts dead.details( ARGV )
+      when "del"   then dead.delete_entries( ARGV )
+      when "now"   then dead.retry_entries( ARGV )
+      when "clear" then dead.clear
       else Parser.parse( %w[ --help ] )
     end
 
   when "processes"
+    processes = Processes.new
+
     case ARGV.shift
-      when "list"  then print_processes
-      when "quiet" then quiet_processes
-      when "kill"  then kill_processes
-      when "clean" then clean_processes
+      when "list"  then puts processes
+      when "quiet" then processes.quiet
+      when "kill"  then processes.kill
+      when "clean" then processes.clean
       else Parser.parse( %w[ --help ] )
     end
 
   when "workers"
+    workers = Workers.new
     case ARGV.shift
-      when "list" then print_workers
+      when "list" then puts workers
       else Parser.parse( %w[ --help ] )
     end
 
