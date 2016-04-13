@@ -2,9 +2,9 @@
 A CLI interface to the sidekiq api
 
 # usage
-    sideq.rb --help
+    sideq --help
 
-    Usage: ./sideq.rb [options] command [subcommand]
+    Usage: sideq [options] command [subcommand]
 
     Commands and subcommands:
     stats                    Print sidekiq statistics
