@@ -31,62 +31,31 @@ module Sideq
 
     def delete_entries( job_ids )
       deleted = 0
-      job_ids.each do |job_id|
-        # TODO: Inefficient in the free(beer) sidekiq version; 
-        #       find something more efficient here (sr 2016-04-06)
-        job = retry_set.find_job( job_id )
-        if job
-          job.delete
-          puts "#{job_id}: deleted"
-          deleted += 1
-        else
-          puts "#{job_id}: not found"
-        end
+      each_job( job_ids ) do |job_id|
+        job.delete
+        puts "#{job_id}: deleted"
+        deleted += 1
       end
       puts "Retry Set: Deleted #{deleted} entries"
     end
 
     def kill_entries( job_ids )
       killed = 0
-      job_ids.each do |job_id|
-        # TODO: Inefficient in the free(beer) sidekiq version; 
-        #       find something more efficient here (sr 2016-04-06)
-        job = retry_set.find_job( job_id )
-        if job
-          begin
-            job.kill
-            puts "#{job_id}: moved to dead set"
-            killed += 1
-          rescue
-            puts "#{job_id}: failed - #{$!.message}"
-          end
-        else
-          puts "#{job_id}: not found"
-        end
+      each_job( job_ids ) do |job|
+        job.kill
+        puts "#{job_id}: moved to dead set"
+        killed += 1
       end
-
       puts "Retry Set: Moved #{killed} entries to Dead Set"
     end
 
     def retry_entries( job_ids )
       retried = 0
-      job_ids.each do |job_id|
-        # TODO: Inefficient in the free(beer) sidekiq version; 
-        #       find something more efficient here (sr 2016-04-06)
-        job = retry_set.find_job( job_id )
-        if job
-          begin
-            job.retry
-            puts "#{job_id}: retrying"
-            retried += 1
-          rescue
-            puts "#{job_id}: failed - #{$!.message}"
-          end
-        else
-          puts "#{job_id}: not found"
-        end
+      each_job( job_ids ) do |job|
+        job.retry
+        puts "#{job_id}: retrying"
+        retried += 1
       end
-
       puts "Retry Set: Retried #{retried} entries"
     end
 
@@ -95,6 +64,21 @@ module Sideq
     end
 
     protected
+    def each_job( job_ids )
+      job_ids.each do |job_id|
+        job = retry_set.find_job( job_id )
+        if job
+          begin
+            yield( job )
+          rescue
+            puts "#{job_id}: failed - #{$!.message}"
+          end
+        else
+          puts "#{job_id}: not found"
+        end
+      end
+    end
+
     def job_details( job )
       [ "JobID:         #{job.jid}",
         "Created at:    #{job.created_at.strftime( "%F %T" )}",
@@ -105,6 +89,7 @@ module Sideq
         "Retried at:    #{job["retried_at"] ? Time.at( job["retried_at"] ).strftime( "%F %T" ) : "never"}",
         "Retries:       #{job["retry_count"]}",
         "Retry?:        #{job["retry"]}",
+        "Next retry at  #{job.at.strftime( "%F %T" )}",
         "Error Class:   #{job["error_class"]}",
         "Error Message: #{job["error_message"]}" ].join( "\n" )
     end

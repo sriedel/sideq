@@ -77,27 +77,26 @@ Sidekiq.configure_client do |config|
   config.redis = { :url  => url, :size => 1 }
 end
 
-case ARGV.shift
+object = ARGV.shift
+case object
   when "stats" then puts Sideq::Stats.new
 
   when "queues" 
-    queues = Sideq::Queues.new
-
     case ARGV.shift
-      when "list"  then puts queues
-      when "del"   then queues.delete_entries( ARGV.shift, ARGV )
-      when "clear" then queues.clear( ARGV.shift )
+      when "list"  then puts Sideq::Queue.overview
       else Parser.parse( %w[ --help ] )
     end
 
   when "queue"
-    queues = Sideq::Queues.new
+    command = ARGV.shift
+    queue_name = ARGV.shift
+    queue = Sideq::Queue.new( queue_name )
 
-    case ARGV.shift
-      when "list"  then puts queues.list( ARGV.shift )
-      when "show"  then puts queues.details( ARGV.shift )
-      when "del"   then queues.delete_entries( ARGV.shift, ARGV )
-      when "clear" then queues.clear( ARGV.shift )
+    case command
+      when "list"  then puts queue
+      when "show"  then puts queue.details( ARGV )
+      when "del"   then queue.delete_entries( ARGV )
+      when "clear" then queue.clear
       else Parser.parse( %w[ --help ] )
     end
 
