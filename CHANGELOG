@@ -1,6 +1,7 @@
-## Next release
+## 0.1.1
 - Add per-queue information and manipulation 
 - Rename 'queue list' command to 'queues list' to make place for the per-queue commands
+- Add next execution time to details of the retry set
 
 ## 0.1.0
 - Initial release
