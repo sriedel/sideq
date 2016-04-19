@@ -1,8 +1,9 @@
 Gem::Specification.new do |s|
   s.version = "0.1.1"
   s.author = "Sven Riedel"
-  s.files = %w[ README.md ] +
-             Dir.glob( "bin/**/*" )
+  s.files = %w[ README.md CHANGELOG ] +
+             Dir.glob( "bin/**/*" ) +
+             Dir.glob( "lib/**/*" )
   s.name = "sideq"
   s.bindir = "bin"
   s.executables = [ "sideq" ]
