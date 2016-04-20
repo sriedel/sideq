@@ -1,3 +1,7 @@
+## 0.1.2 
+- Bug: Fix job accessor name error
+- Bug: Fix reported job number when clearing retry set and dead set
+
 ## 0.1.1
 - Add per-queue information and manipulation 
 - Rename 'queue list' command to 'queues list' to make place for the per-queue commands
