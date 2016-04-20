@@ -33,7 +33,7 @@ module Sideq
       deleted = 0
       each_job( job_ids ) do |job_id|
         job.delete
-        puts "#{job_id}: deleted"
+        puts "#{job.jid}: deleted"
         deleted += 1
       end
       puts "Retry Set: Deleted #{deleted} entries"
@@ -43,7 +43,7 @@ module Sideq
       killed = 0
       each_job( job_ids ) do |job|
         job.kill
-        puts "#{job_id}: moved to dead set"
+        puts "#{job.jid}: moved to dead set"
         killed += 1
       end
       puts "Retry Set: Moved #{killed} entries to Dead Set"
@@ -53,14 +53,15 @@ module Sideq
       retried = 0
       each_job( job_ids ) do |job|
         job.retry
-        puts "#{job_id}: retrying"
+        puts "#{job.jid}: retrying"
         retried += 1
       end
       puts "Retry Set: Retried #{retried} entries"
     end
 
     def clear
-      puts "Retry Set: Deleted #{retry_set.clear} entries"
+      size = retry_set.size
+      puts "Retry Set: Deleted #{size} entries"
     end
 
     protected
