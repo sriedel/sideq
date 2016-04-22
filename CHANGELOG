@@ -1,3 +1,7 @@
+## 0.1.3
+- Add "retry list csv" and "dead list csv" commands for better parsing in scripts
+- Bug: Fix type in help text: "queues list" instead of "queue list"
+
 ## 0.1.2 
 - Bug: Fix job accessor name error
 - Bug: Fix reported job number when clearing retry set and dead set

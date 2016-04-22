@@ -19,18 +19,20 @@ class Parser
                     "\n" <<
                     "Commands and subcommands:\n" <<
                     "stats                        Print sidekiq statistics\n" <<
-                    "queue list                   List all known queues\n" <<
+                    "queues list                  List all known queues\n" <<
                     "queue list name              List contents of named queue\n" <<
                     "queue show name jid [jid...] Show details of jobs in named queue\n" <<
                     "queue del name jid [jid...]  Delete jobs from the named queue\n" <<
                     "queue clear name             Clear all jobs from the named queue\n" <<
                     "retry list                   List contents of the retry set\n" <<
+                    "retry list csv               List contents of the retry set as CSV\n" <<
                     "retry show jid [jid ...]     Show details of entrie sin the retry set\n" <<
                     "retry del jid [jid ...]      Delete entries from the retry set\n" <<
                     "retry kill jid [jid ...]     Move jobs from the retry set to the dead set\n" <<
                     "retry now jid [jid ...]      Retry jobs in the retry set right now\n" <<
                     "retry clear                  Clears all entries in the retry set\n" <<
                     "dead list                    List contents of the dead set\n" <<
+                    "dead list csv                List contents of the dead set as CSV\n" <<
                     "dead show jid [jid...]       Show details of entries in the dead set\n" <<
                     "dead del jid [jid...]        Delete jobs from the dead set\n" <<
                     "dead now jid [jid...]        Retry jobs from the dead set right now\n" <<
@@ -104,7 +106,12 @@ case object
     retries = Sideq::Retries.new
 
     case ARGV.shift
-      when "list"  then puts retries
+      when "list"
+        case ARGV.shift 
+          when "csv" then puts retries.to_csv
+          else puts retries
+        end
+
       when "show"  then puts retries.details( ARGV )
       when "del"   then retries.delete_entries( ARGV )
       when "kill"  then retries.kill_entries( ARGV )
@@ -117,7 +124,12 @@ case object
     dead = Sideq::Dead.new
 
     case ARGV.shift
-      when "list"  then puts dead
+      when "list" 
+        case ARGV.shift
+          when "csv" then puts dead.to_csv
+          else puts dead
+        end
+
       when "show"  then puts dead.details( ARGV )
       when "del"   then dead.delete_entries( ARGV )
       when "now"   then dead.retry_entries( ARGV )

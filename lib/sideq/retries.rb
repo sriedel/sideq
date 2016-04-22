@@ -22,6 +22,25 @@ module Sideq
       end.join( "\n" )
     end
 
+    def to_csv
+      require "csv"
+      CSV.generate do |csv|
+        csv << [ "JobID", "Created at", "Class", "Error Class", "Enqueued at", "Failed at", "Retry count", "Retried at", "Continue retries", "Error" ]
+        retry_set.each do |job|
+          csv << [ job.jid, 
+                   job.created_at.strftime( "%F %T" ), 
+                   job.display_class, 
+                   job["error_class"],
+                   job.enqueued_at.strftime( "%F %T" ),
+                   Time.at( job["failed_at"] ).strftime( "%F %T" ),
+                   job["retry_count"],
+                   job["retried_at"] ? Time.at( job["retried_at"] ).strftime( "%F %T" ) : "never",
+                   job["retry"],
+                   "#{job["error_class"]}: #{job["error_message"][0,77-job["error_class"].size]}" ]
+        end
+      end
+    end
+
     def details( job_ids )
       retry_set.each_with_object( [] ) do |job, memo|
         next unless job_ids.include?( job.jid )
