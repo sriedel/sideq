@@ -1,3 +1,8 @@
+## 0.1.4
+- Fix retry clear command
+- Fix dead clear command
+- Fix retry del variable name
+
 ## 0.1.3
 - Add "retry list csv" and "dead list csv" commands for better parsing in scripts
 - Bug: Fix type in help text: "queues list" instead of "queue list"

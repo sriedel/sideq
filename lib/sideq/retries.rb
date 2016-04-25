@@ -50,7 +50,7 @@ module Sideq
 
     def delete_entries( job_ids )
       deleted = 0
-      each_job( job_ids ) do |job_id|
+      each_job( job_ids ) do |job|
         job.delete
         puts "#{job.jid}: deleted"
         deleted += 1
@@ -80,6 +80,7 @@ module Sideq
 
     def clear
       size = retry_set.size
+      retry_set.clear
       puts "Retry Set: Deleted #{size} entries"
     end
 

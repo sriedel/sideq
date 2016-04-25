@@ -71,6 +71,7 @@ module Sideq
 
     def clear
       size = dead_set.size
+      dead_set.clear
       puts "Dead Set: Deleted #{size} entries"
     end
 
